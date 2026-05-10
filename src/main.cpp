@@ -1,11 +1,13 @@
 #include <iostream>
 #include <string>
+#include <vector>
+#include <sstream>
 
 std::string strip (const std::string& str) {
   size_t first = str.find_first_not_of(" \t\n\r");
   if (first == std::string::npos) return "";
   size_t last = str.find_last_not_of(" \t\n\r");
-  return s.substr(first, last - first + 1);
+  return str.substr(first, last - first + 1);
 }
 
 std::vector<std::string> strip (const std::string& str, char delim = ' ') {

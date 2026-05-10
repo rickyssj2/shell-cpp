@@ -37,7 +37,7 @@ int main() {
     if (cmd == "exit") {
       flag = 0;
     } else if (cmd == "echo") {
-      for (int i = 0; i < tokens.size(); i++) {
+      for (int i = 1; i < tokens.size(); i++) {
         std::cout << tokens[i] << " ";
       }
       std::cout << std::endl;

@@ -7,10 +7,17 @@ int main() {
   std::cerr << std::unitbuf;
 
   // TODO: Uncomment the code below to pass the first stage
-  while (1) {
+  int flag = 1;
+  while (flag) {
     std::cout << "$ ";
-    std::string input;
-    std::cin >> input;
-    std::cout << input << ": command not found" << std::endl;
+    std::string cmd;
+    std::cin >> cmd;
+    switch (cmd) {
+      case "exit": 
+        flag = 0; 
+        break;
+      default:
+        std::cout << cmd << ": command not found" << std::endl;
+    }
   }
 }

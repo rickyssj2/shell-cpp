@@ -10,7 +10,7 @@ std::string strip (const std::string& str) {
   return str.substr(first, last - first + 1);
 }
 
-std::vector<std::string> strip (const std::string& str, char delim = ' ') {
+std::vector<std::string> split (const std::string& str, char delim = ' ') {
   std::vector<std::string> tokens;
   std::stringstream ss(str);
   std::string token;

@@ -12,12 +12,11 @@ int main() {
     std::cout << "$ ";
     std::string cmd;
     std::cin >> cmd;
-    switch (cmd) {
-      case "exit": 
-        flag = 0; 
-        break;
-      default:
-        std::cout << cmd << ": command not found" << std::endl;
+    if (cmd == "exit") {
+      flag = 0;
+      break;
+    } else {
+      std::cout << cmd << ": command not found" << std::endl;
     }
   }
 }

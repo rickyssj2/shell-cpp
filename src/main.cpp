@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <unordered_set>
 
 std::string strip (const std::string& str) {
   size_t first = str.find_first_not_of(" \t\n\r");
@@ -20,6 +21,11 @@ std::vector<std::string> split (const std::string& str, char delim = ' ') {
 }
 
 int main() {
+  std::unordered_set<std::string> commands;
+  commands.insert("echo");
+  commands.insert("exit");
+  commands.insert("type");
+  
   int flag = 1;
   while (flag) {
     // Flush after every std::cout / std:cerr
@@ -39,6 +45,12 @@ int main() {
         std::cout << tokens[i] << " ";
       }
       std::cout << std::endl;
+    } else if (cmd == "type") {
+      std::string cmd2 = tokens[1];
+      if (commands.find(cmd2) != commands.end())
+        std::cout << cmd2 << " is a shell builtin" << std::endl;
+      else
+        std::cout << cmd2 << ": not found" << std::endl;
     } else {
       std::cout << cmd << ": command not found" << std::endl;
     }

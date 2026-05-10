@@ -38,7 +38,7 @@ int main() {
       flag = 0;
     } else if (cmd == "echo") {
       for (int i = 1; i < tokens.size(); i++) {
-        std::cout << tokens[i] << " ";
+        std::cout << tokens[i];
       }
       std::cout << std::endl;
     } else {

@@ -20,16 +20,14 @@ std::vector<std::string> split (const std::string& str, char delim = ' ') {
 }
 
 int main() {
-  // Flush after every std::cout / std:cerr
-  std::cout << std::unitbuf;
-  std::cerr << std::unitbuf;
-
-  // TODO: Uncomment the code below to pass the first stage
   int flag = 1;
   while (flag) {
+    // Flush after every std::cout / std:cerr
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
     std::cout << "$ ";
     std::string input;
-    std::cin >> input;
+    std::getline(std::cin, input);
     input = strip(input);
     std::vector<std::string> tokens = split(input);
     std::string cmd = tokens[0];
@@ -38,7 +36,7 @@ int main() {
       flag = 0;
     } else if (cmd == "echo") {
       for (int i = 1; i < tokens.size(); i++) {
-        std::cout << tokens[i];
+        std::cout << tokens[i] << " ";
       }
       std::cout << std::endl;
     } else {

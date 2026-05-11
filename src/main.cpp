@@ -123,6 +123,7 @@ int main () {
   builtins.insert("echo");
   builtins.insert("exit");
   builtins.insert("type");
+  builtins.insert("pwd");
 
   int flag = 1;
   while (flag) {

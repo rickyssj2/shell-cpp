@@ -118,6 +118,53 @@ std::vector<std::string> split (const std::string& str, char delim = ' ') {
   return tokens;
 }
 
+std::vector<std::string> parse(const std::string& str) {
+  std::vector<std::string> tokens;
+  std::string current;       // token being accumulated
+  bool in_token = false;     // true once we've started a token (even via empty quotes)
+  bool in_single_quote = false;
+  size_t i = 0;
+
+  while (i < str.size()) {
+    char c = str[i];
+
+    if (in_single_quote) {
+      if (c == '\'') {
+        // closing quote — exit quote mode, stay in token
+        in_single_quote = false;
+      } else {
+        // everything inside single quotes is literal (spaces, $, *, etc.)
+        current += c;
+      }
+      ++i;
+
+    } else if (c == '\'') {
+      // opening quote — mark that a token has started (handles '' → empty concat)
+      in_token = true;
+      in_single_quote = true;
+      ++i;
+
+    } else if (c == ' ' || c == '\t') {
+      if (in_token) {
+        if (!current.empty()) tokens.push_back(current);
+        current.clear();
+        in_token = false;
+      }
+      // skip consecutive whitespace outside quotes
+      while (i < str.size() && (str[i] == ' ' || str[i] == '\t')) ++i;
+
+    } else {
+      in_token = true;
+      current += c;
+      ++i;
+    }
+  }
+
+  // flush the last token
+  if (in_token && !current.empty()) tokens.push_back(current);
+  return tokens;
+}
+
 int main () {
   std::unordered_set<std::string> builtins;
   builtins.insert("echo");
@@ -132,10 +179,12 @@ int main () {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
     std::cout << "$ ";
+
     std::string input;
     std::getline(std::cin, input);
     input = strip(input);
-    std::vector<std::string> tokens = split(input);
+
+    std::vector<std::string> tokens = parse(input);
     std::string cmd = tokens[0];
 
     if (cmd == "exit") {

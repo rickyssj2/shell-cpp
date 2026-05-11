@@ -6,6 +6,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <unistd.h>
+#include <optional>
+#include <sys/wait.h>
+#include <sys/types.h> 
 
 #ifdef _WIN32
 constexpr char PATH_LIST_SEP = ';';
@@ -48,6 +51,57 @@ bool is_executable (const fs::path& p) {
   #endif
 }
 
+std::optional<std::string> get_executable (std::string& cmd) {
+  const char* path_cstr = std::getenv("PATH");
+  if (path_cstr == nullptr) {
+    std::cerr << "PATH is not defined";
+  }
+  std::string path = path_cstr;
+  std::vector<fs::path> dirs = split_path_list(path);
+  for (fs::path dir: dirs) {
+    fs::path candidate = dir/cmd;
+    if (is_executable(candidate)) {
+      return candidate.string();
+    }
+  }
+  return std::nullopt;
+}
+
+int execute (const std::string& exec_full_path, const std::vector<std::string>& args) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    std::perror("fork");
+    return 1;
+  }
+
+  std::vector<char*> argv;
+  argv.reserve(args.size() + 2);
+  argv.push_back(const_cast<char*>(exec_full_path.c_str()));
+  for (const auto& s : args) {
+      argv.push_back(const_cast<char*>(s.c_str()));
+  }
+  argv.push_back(nullptr);
+
+  if (pid == 0) {
+    // Child
+    execv(exec_full_path.c_str(), argv.data());
+  } else {
+    // Parent
+    int status;
+    if (waitpid(pid, &status, 0) < 0) {
+        std::perror("waitpid");
+        return 1;
+    }
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) {
+        std::cerr << "Killed by signal " << WTERMSIG(status) << "\n";
+        return 128 + WTERMSIG(status);
+    }
+    return 1;
+  }
+  return 1;
+}
+
 std::string strip (const std::string& str) {
   size_t first = str.find_first_not_of(" \t\n\r");
   if (first == std::string::npos) return "";
@@ -65,10 +119,10 @@ std::vector<std::string> split (const std::string& str, char delim = ' ') {
 }
 
 int main () {
-  std::unordered_set<std::string> commands;
-  commands.insert("echo");
-  commands.insert("exit");
-  commands.insert("type");
+  std::unordered_set<std::string> builtins;
+  builtins.insert("echo");
+  builtins.insert("exit");
+  builtins.insert("type");
 
   int flag = 1;
   while (flag) {
@@ -84,6 +138,7 @@ int main () {
 
     if (cmd == "exit") {
       flag = 0;
+
     } else if (cmd == "echo") {
       for (int i = 1; i < tokens.size(); i++) {
         std::cout << tokens[i] << " ";
@@ -93,31 +148,22 @@ int main () {
     } else if (cmd == "type") {
       std::string cmd2 = tokens[1];
 
-      if (commands.find(cmd2) != commands.end()) {
+      if (builtins.find(cmd2) != builtins.end()) {
         std::cout << cmd2 << " is a shell builtin" << std::endl;
         continue;
       }
       
-      const char* path_cstr = std::getenv("PATH");
-      if (path_cstr == nullptr) {
-        std::cerr << "PATH is not defined";
-      }
-      std::string path = path_cstr;
-      std::vector<fs::path> dirs = split_path_list(path);
-      bool found = false;
-      for (fs::path dir: dirs) {
-        fs::path candidate = dir/cmd2;
-        if (is_executable(candidate)) {
-          std::cout << cmd2 << " is " << candidate.string() << std::endl;
-          found = true;
-          break;
-        }
+      if (auto exec = get_executable(cmd2)) {
+        std::cout << cmd2 << " is " << exec.value() << std::endl;
+        continue;
       }
       
-      if (!found) {
-        std::cout << cmd2 << ": not found" << std::endl;
-      }
-      
+      std::cout << cmd2 << ": not found" << std::endl;
+    
+    } else if (auto exec = get_executable(cmd)) {
+      std::vector<std::string> args(tokens.begin() + 1, tokens.end());
+      execute(exec.value(), args);
+
     } else {
       std::cout << cmd << ": command not found" << std::endl;
     }

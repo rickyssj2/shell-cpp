@@ -160,6 +160,10 @@ int main () {
       
       std::cout << cmd2 << ": not found" << std::endl;
     
+    } else if (cmd == "pwd") {
+      fs::path cwd = fs::current_path();
+      std::cout << cwd.string() << std::endl;
+
     } else if (auto exec = get_executable(cmd)) {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());
       execute(cmd, exec.value(), args);

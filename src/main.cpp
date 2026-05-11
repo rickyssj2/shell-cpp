@@ -124,6 +124,7 @@ int main () {
   builtins.insert("exit");
   builtins.insert("type");
   builtins.insert("pwd");
+  builtins.insert("cd");
 
   int flag = 1;
   while (flag) {
@@ -164,6 +165,12 @@ int main () {
     } else if (cmd == "pwd") {
       fs::path cwd = fs::current_path();
       std::cout << cwd.string() << std::endl;
+
+    } else if (cmd == "cd") {
+      std::string new_cwd = tokens[1];
+      if (chdir(new_cwd.c_str()) != 0) {
+        std::cout << "cd: " << new_cwd << ": No such file or directory" << std::endl;
+      }
 
     } else if (auto exec = get_executable(cmd)) {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());

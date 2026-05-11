@@ -67,7 +67,7 @@ std::optional<std::string> get_executable (std::string& cmd) {
   return std::nullopt;
 }
 
-int execute (const std::string& exec_full_path, const std::vector<std::string>& args) {
+int execute (const std::string& cmd, const std::string& exec_full_path, const std::vector<std::string>& args) {
   pid_t pid = fork();
   if (pid < 0) {
     std::perror("fork");
@@ -76,7 +76,7 @@ int execute (const std::string& exec_full_path, const std::vector<std::string>& 
 
   std::vector<char*> argv;
   argv.reserve(args.size() + 2);
-  argv.push_back(const_cast<char*>(exec_full_path.c_str()));
+  argv.push_back(const_cast<char*>(cmd.c_str()));
   for (const auto& s : args) {
       argv.push_back(const_cast<char*>(s.c_str()));
   }
@@ -162,7 +162,7 @@ int main () {
     
     } else if (auto exec = get_executable(cmd)) {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-      execute(exec.value(), args);
+      execute(cmd, exec.value(), args);
 
     } else {
       std::cout << cmd << ": command not found" << std::endl;

@@ -139,16 +139,18 @@ std::vector<std::string> parse (const std::string& str) {
         current += c;
       }
       ++i;
-    } else if (in_double_quote) {
-      if (c == '"') {
-        in_double_quote = false;
-      } else {
-        current += c;
-      }
-      ++i;
     } else if (in_backslash) {
       current += c;
       in_backslash = false;
+      ++i;
+    } else if (in_double_quote) {
+      if (c == '"') {
+        in_double_quote = false;
+      } else if (c == '\\') {
+        in_backslash = true;
+      } else {
+        current += c;
+      }
       ++i;
     } else if (c == '"') {
       in_token = true;

@@ -124,6 +124,7 @@ std::vector<std::string> parse (const std::string& str) {
   bool in_token = false;     // true once we've started a token (even via empty quotes)
   bool in_single_quote = false;
   bool in_double_quote = false;
+  bool in_backslash = false;
   size_t i = 0;
 
   while (i < str.size()) {
@@ -145,7 +146,10 @@ std::vector<std::string> parse (const std::string& str) {
         current += c;
       }
       ++i;
-      
+    } else if (in_backslash) {
+      current += c;
+      in_backslash = false;
+      ++i;
     } else if (c == '"') {
       in_token = true;
       in_double_quote = true;
@@ -156,7 +160,10 @@ std::vector<std::string> parse (const std::string& str) {
       in_token = true;
       in_single_quote = true;
       ++i;
-
+    } else if (c == '\\') {
+      in_token = true;
+      in_backslash = true;
+      ++i;
     } else if (c == ' ' || c == '\t') {
       if (in_token) {
         if (!current.empty()) tokens.push_back(current);

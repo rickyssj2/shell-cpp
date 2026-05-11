@@ -168,6 +168,9 @@ int main () {
 
     } else if (cmd == "cd") {
       std::string new_cwd = tokens[1];
+      if (new_cwd == "~") {
+        new_cwd = std::getenv("HOME");
+      }
       if (chdir(new_cwd.c_str()) != 0) {
         std::cout << "cd: " << new_cwd << ": No such file or directory" << std::endl;
       }

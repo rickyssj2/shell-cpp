@@ -108,7 +108,7 @@ int main () {
       for (fs::path dir: dirs) {
         fs::path candidate = dir/cmd2;
         if (is_executable(candidate)) {
-          std::cout << cmd2 << " is " << candidate << std::endl;
+          std::cout << cmd2 << " is " << candidate.string() << std::endl;
           found = true;
           break;
         }

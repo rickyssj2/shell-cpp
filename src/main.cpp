@@ -118,11 +118,12 @@ std::vector<std::string> split (const std::string& str, char delim = ' ') {
   return tokens;
 }
 
-std::vector<std::string> parse(const std::string& str) {
+std::vector<std::string> parse (const std::string& str) {
   std::vector<std::string> tokens;
   std::string current;       // token being accumulated
   bool in_token = false;     // true once we've started a token (even via empty quotes)
   bool in_single_quote = false;
+  bool in_double_quote = false;
   size_t i = 0;
 
   while (i < str.size()) {
@@ -136,6 +137,18 @@ std::vector<std::string> parse(const std::string& str) {
         // everything inside single quotes is literal (spaces, $, *, etc.)
         current += c;
       }
+      ++i;
+    } else if (in_double_quote) {
+      if (c == '"') {
+        in_double_quote = false;
+      } else {
+        current += c;
+      }
+      ++i;
+      
+    } else if (c == '"') {
+      in_token = true;
+      in_double_quote = true;
       ++i;
 
     } else if (c == '\'') {

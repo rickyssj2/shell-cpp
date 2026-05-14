@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <unistd.h>
+#include <fcntl.h>
 #include <optional>
 #include <sys/wait.h>
 #include <sys/types.h> 
@@ -195,18 +196,52 @@ int main () {
   builtins.insert("pwd");
   builtins.insert("cd");
 
+  std::vector<std::string> stdout_redirect_tokens{ ">", "1>" };
+  
   int flag = 1;
   while (flag) {
     // Flush after every std::cout / std:cerr
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
     std::cout << "$ ";
-
+    
     std::string input;
     std::getline(std::cin, input);
     input = strip(input);
-
+    
     std::vector<std::string> tokens = parse(input);
+    
+    bool stdout_redirect = false;
+    std::size_t stdout_redirect_idx = -1;
+    for (const std::string& redir : stdout_redirect_tokens) {
+      auto it = std::find(tokens.begin(), tokens.end(), redir);
+      if (it != tokens.end()) {
+        stdout_redirect_idx = it - tokens.begin();
+        stdout_redirect = true;
+        break;
+      }
+    }
+
+    int stdout = dup(STDOUT_FILENO);
+    if (stdout_redirect) {
+      std::string new_stdout = tokens[stdout_redirect_idx + 1];
+
+      if (stdout_redirect_idx + 1 >= tokens.size()) {
+        std::cout << "No filename for redirection";
+      } else {
+        // Remove filename first, then redirection operator.
+        tokens.erase(tokens.begin() + stdout_redirect_idx + 1);
+        tokens.erase(tokens.begin() + stdout_redirect_idx);
+      }
+
+      int newout = open(new_stdout.c_str(), O_WRONLY | O_CREAT, 0666);
+      if (dup2(newout, STDOUT_FILENO) == -1) {
+        perror("dup2");
+        return 1;
+      }
+      close(newout);
+    }
+
     std::string cmd = tokens[0];
 
     if (cmd == "exit") {
@@ -252,6 +287,14 @@ int main () {
 
     } else {
       std::cout << cmd << ": command not found" << std::endl;
+    }
+
+    if (stdout_redirect) {
+      if (dup2(stdout, STDOUT_FILENO) == -1) {
+        perror("dup2");
+        return 1;
+      }
+      close(stdout);
     }
   }
 }

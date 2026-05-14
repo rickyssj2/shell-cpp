@@ -188,6 +188,62 @@ std::vector<std::string> parse (const std::string& str) {
   return tokens;
 }
 
+// Holds the result of a redirect setup: whether a redirect was applied and
+// the saved (dup'd) original fd needed to restore it afterward.
+struct RedirectResult {
+  bool redirected = false;
+  int  saved_fd   = -1;
+};
+
+// Scans tokens for any operator in redirect_ops, opens the target file with
+// open_flags, wires target_fd to it, and returns the saved original fd.
+// The operator and filename tokens are erased from tokens in-place.
+RedirectResult setup_redirect(
+    std::vector<std::string>&       tokens,
+    const std::vector<std::string>& redirect_ops,
+    int                             target_fd,
+    int                             open_flags)
+{
+  for (const std::string& op : redirect_ops) {
+    auto it = std::find(tokens.begin(), tokens.end(), op);
+    if (it == tokens.end()) continue;
+
+    std::size_t op_idx = it - tokens.begin();
+
+    if (op_idx + 1 >= tokens.size()) {
+      std::cerr << "syntax error: no filename after '" << op << "'\n";
+      return {};
+    }
+
+    std::string filename = tokens[op_idx + 1];
+
+    // Erase filename first (higher index), then operator — order matters.
+    tokens.erase(tokens.begin() + op_idx + 1);
+    tokens.erase(tokens.begin() + op_idx);
+
+    int saved = dup(target_fd);
+    if (saved == -1) { perror("dup"); return {}; }
+
+    int newfd = open(filename.c_str(), open_flags, 0644);
+    if (newfd == -1) { perror("open"); close(saved); return {}; }
+
+    if (dup2(newfd, target_fd) == -1) { perror("dup2"); close(saved); close(newfd); return {}; }
+    close(newfd);
+
+    return { true, saved };
+  }
+  return {};
+}
+
+// Restores target_fd to its original destination using the saved fd in r.
+void restore_fd(int target_fd, RedirectResult& r) {
+  if (!r.redirected) return;
+  dup2(r.saved_fd, target_fd);
+  close(r.saved_fd);
+  r.redirected = false;
+  r.saved_fd   = -1;
+}
+
 int main () {
   std::unordered_set<std::string> builtins;
   builtins.insert("echo");
@@ -196,8 +252,11 @@ int main () {
   builtins.insert("pwd");
   builtins.insert("cd");
 
-  std::vector<std::string> stdout_redirect_tokens{ ">", "1>" };
-  
+  const std::vector<std::string> stdout_redirect_ops        { ">",  "1>"  };
+  const std::vector<std::string> stdout_redirect_ops_append { ">>", "1>>" };
+  const std::vector<std::string> stderr_redirect_ops        { "2>"        };
+  const std::vector<std::string> stderr_redirect_ops_append { "2>>"       };
+
   int flag = 1;
   while (flag) {
     // Flush after every std::cout / std:cerr
@@ -210,37 +269,14 @@ int main () {
     input = strip(input);
     
     std::vector<std::string> tokens = parse(input);
-    
-    bool stdout_redirect = false;
-    std::size_t stdout_redirect_idx = -1;
-    for (const std::string& redir : stdout_redirect_tokens) {
-      auto it = std::find(tokens.begin(), tokens.end(), redir);
-      if (it != tokens.end()) {
-        stdout_redirect_idx = it - tokens.begin();
-        stdout_redirect = true;
-        break;
-      }
-    }
 
-    int stdout = dup(STDOUT_FILENO);
-    if (stdout_redirect) {
-      std::string new_stdout = tokens[stdout_redirect_idx + 1];
+    auto out_r = setup_redirect(tokens, stdout_redirect_ops,        STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
+    if (!out_r.redirected)
+      out_r    = setup_redirect(tokens, stdout_redirect_ops_append,  STDOUT_FILENO, O_WRONLY | O_CREAT | O_APPEND);
 
-      if (stdout_redirect_idx + 1 >= tokens.size()) {
-        std::cout << "No filename for redirection";
-      } else {
-        // Remove filename first, then redirection operator.
-        tokens.erase(tokens.begin() + stdout_redirect_idx + 1);
-        tokens.erase(tokens.begin() + stdout_redirect_idx);
-      }
-
-      int newout = open(new_stdout.c_str(), O_WRONLY | O_CREAT, 0666);
-      if (dup2(newout, STDOUT_FILENO) == -1) {
-        perror("dup2");
-        return 1;
-      }
-      close(newout);
-    }
+    auto err_r = setup_redirect(tokens, stderr_redirect_ops,        STDERR_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
+    if (!err_r.redirected)
+      err_r    = setup_redirect(tokens, stderr_redirect_ops_append,  STDERR_FILENO, O_WRONLY | O_CREAT | O_APPEND);
 
     std::string cmd = tokens[0];
 
@@ -289,12 +325,7 @@ int main () {
       std::cout << cmd << ": command not found" << std::endl;
     }
 
-    if (stdout_redirect) {
-      if (dup2(stdout, STDOUT_FILENO) == -1) {
-        perror("dup2");
-        return 1;
-      }
-      close(stdout);
-    }
+    restore_fd(STDOUT_FILENO, out_r);
+    restore_fd(STDERR_FILENO, err_r);
   }
 }

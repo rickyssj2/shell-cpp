@@ -10,6 +10,8 @@
 #include <optional>
 #include <sys/wait.h>
 #include <sys/types.h> 
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #ifdef _WIN32
 constexpr char PATH_LIST_SEP = ';';
@@ -244,37 +246,72 @@ void restore_fd(int target_fd, RedirectResult& r) {
   r.saved_fd   = -1;
 }
 
-int main () {
-  std::unordered_set<std::string> builtins;
-  builtins.insert("echo");
-  builtins.insert("exit");
-  builtins.insert("type");
-  builtins.insert("pwd");
-  builtins.insert("cd");
+std::unordered_set<std::string> builtins = {"echo", "exit", "type", "pwd", "cd"};
 
+char * custom_command_completion(const char *c_text, int state) {
+  static std::unordered_set<std::string>::iterator it;
+  static size_t len;
+
+  if (state == 0) {
+    it = builtins.begin();
+    len = strlen(c_text);
+  }
+  while (it != builtins.end()) {
+    const std::string& cmd = *it;
+    ++it;
+    if (cmd.compare(0, len, c_text) == 0) return strdup(cmd.c_str());
+  }
+  return nullptr;
+}
+
+char ** custom_completion(const char *text, int start, int end) {
+  char **matches = nullptr;
+
+  if (start == 0)
+    matches = completion_matches(text, custom_command_completion);
+  return matches;
+}
+
+void readline_init() {
+  rl_attempted_completion_function = custom_completion;
+  return;
+}
+
+int main () {
   const std::vector<std::string> stdout_redirect_ops        { ">",  "1>"  };
   const std::vector<std::string> stdout_redirect_ops_append { ">>", "1>>" };
   const std::vector<std::string> stderr_redirect_ops        { "2>"        };
   const std::vector<std::string> stderr_redirect_ops_append { "2>>"       };
+
+  // Custom initializer to inject custom_command_completion
+  readline_init();
+
+  // Configure readline to auto-complete paths when the tab key is hit.
+  rl_bind_key('\t', rl_complete);
+
+  // Enable history
+  using_history();
 
   int flag = 1;
   while (flag) {
     // Flush after every std::cout / std:cerr
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
-    std::cout << "$ ";
     
     std::string input;
-    std::getline(std::cin, input);
+    input = readline("$ ");
     input = strip(input);
+
+    // Add input to readline history.
+    add_history(input.c_str());
     
     std::vector<std::string> tokens = parse(input);
 
-    auto out_r = setup_redirect(tokens, stdout_redirect_ops,        STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
+    auto out_r = setup_redirect(tokens, stdout_redirect_ops,         STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
     if (!out_r.redirected)
       out_r    = setup_redirect(tokens, stdout_redirect_ops_append,  STDOUT_FILENO, O_WRONLY | O_CREAT | O_APPEND);
 
-    auto err_r = setup_redirect(tokens, stderr_redirect_ops,        STDERR_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
+    auto err_r = setup_redirect(tokens, stderr_redirect_ops,         STDERR_FILENO, O_WRONLY | O_CREAT | O_TRUNC);
     if (!err_r.redirected)
       err_r    = setup_redirect(tokens, stderr_redirect_ops_append,  STDERR_FILENO, O_WRONLY | O_CREAT | O_APPEND);
 

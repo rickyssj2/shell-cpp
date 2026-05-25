@@ -268,7 +268,7 @@ char ** custom_completion(const char *text, int start, int end) {
   char **matches = nullptr;
 
   if (start == 0)
-    matches = completion_matches(text, custom_command_completion);
+    matches = rl_completion_matches(text, custom_command_completion);
   return matches;
 }
 

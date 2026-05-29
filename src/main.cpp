@@ -246,7 +246,7 @@ void restore_fd(int target_fd, RedirectResult& r) {
   r.saved_fd   = -1;
 }
 
-std::unordered_set<std::string> builtins = {"echo", "exit", "type", "pwd", "cd"};
+std::unordered_set<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete"};
 std::unordered_set<std::string> path_commands;
 
 void cache_path_commands() {

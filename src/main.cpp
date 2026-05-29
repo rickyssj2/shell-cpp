@@ -59,7 +59,7 @@ std::optional<std::string> get_executable (std::string& cmd) {
   if (path_cstr == nullptr) {
     std::cerr << "PATH is not defined";
   }
-  std::string path = path_cstr;
+  std::string path(path_cstr);
   std::vector<fs::path> dirs = split_path_list(path);
   for (fs::path dir: dirs) {
     fs::path candidate = dir/cmd;
@@ -247,16 +247,42 @@ void restore_fd(int target_fd, RedirectResult& r) {
 }
 
 std::unordered_set<std::string> builtins = {"echo", "exit", "type", "pwd", "cd"};
+std::unordered_set<std::string> path_commands;
+
+void cache_path_commands() {
+  const char* path_cstr = std::getenv("PATH");
+  if (!path_cstr) return;
+
+  for (const fs::path& dir : split_path_list(std::string(path_cstr))) {
+      std::error_code ec;
+      for (const auto& entry : fs::directory_iterator(dir, ec)) {
+          if (ec) continue; 
+          if (is_executable(entry.path())) {
+              path_commands.insert(entry.path().filename().string());
+          }
+      }
+  }
+}
 
 char * custom_command_completion(const char *c_text, int state) {
   static std::unordered_set<std::string>::iterator it;
   static size_t len;
 
+  // Try to match builtin commands
   if (state == 0) {
     it = builtins.begin();
     len = strlen(c_text);
   }
   while (it != builtins.end()) {
+    const std::string& cmd = *it;
+    ++it;
+    if (cmd.compare(0, len, c_text) == 0) return strdup(cmd.c_str());
+  }
+  // Try to match cached path commands
+  if (state == 0) {
+    it = path_commands.begin();
+  }
+  while (it != path_commands.end()) {
     const std::string& cmd = *it;
     ++it;
     if (cmd.compare(0, len, c_text) == 0) return strdup(cmd.c_str());
@@ -282,6 +308,9 @@ int main () {
   const std::vector<std::string> stdout_redirect_ops_append { ">>", "1>>" };
   const std::vector<std::string> stderr_redirect_ops        { "2>"        };
   const std::vector<std::string> stderr_redirect_ops_append { "2>>"       };
+
+  // Cache path commands for command completion
+  cache_path_commands();
 
   // Custom initializer to inject custom_command_completion
   readline_init();

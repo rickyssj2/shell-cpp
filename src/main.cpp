@@ -382,7 +382,11 @@ int main () {
       if (chdir(new_cwd.c_str()) != 0) {
         std::cout << "cd: " << new_cwd << ": No such file or directory" << std::endl;
       }
-
+    } else if (cmd == "complete") {
+      std::vector<std::string> args(tokens.begin() + 1, tokens.end());
+      if (args[0] == "-p") {
+        std::cout << "complete: " + args[1] + ": no completion specification" << std::endl;
+      }
     } else if (auto exec = get_executable(cmd)) {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());
       execute(cmd, exec.value(), args);

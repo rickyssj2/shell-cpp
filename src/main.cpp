@@ -248,6 +248,7 @@ void restore_fd(int target_fd, RedirectResult& r) {
 
 std::unordered_set<std::string> builtins = {"echo", "exit", "type", "pwd", "cd", "complete"};
 std::unordered_set<std::string> path_commands;
+std::unordered_map<std::string, std::string> completion_map;
 
 void cache_path_commands() {
   const char* path_cstr = std::getenv("PATH");
@@ -264,29 +265,27 @@ void cache_path_commands() {
   }
 }
 
-char * custom_command_completion(const char *c_text, int state) {
-  static std::unordered_set<std::string>::iterator it;
-  static size_t len;
+char* custom_command_completion(const char* c_text, int state) {
+  static std::vector<std::string> candidates;
+  static size_t idx;
 
-  // Try to match builtin commands
   if (state == 0) {
-    it = builtins.begin();
-    len = strlen(c_text);
+    candidates.clear();
+    idx = 0;
+    size_t len = strlen(c_text);
+
+    for (const auto& cmd : builtins)
+      if (cmd.compare(0, len, c_text) == 0)
+        candidates.push_back(cmd);
+
+    for (const auto& cmd : path_commands)
+      if (cmd.compare(0, len, c_text) == 0)
+        candidates.push_back(cmd);
   }
-  while (it != builtins.end()) {
-    const std::string& cmd = *it;
-    ++it;
-    if (cmd.compare(0, len, c_text) == 0) return strdup(cmd.c_str());
-  }
-  // Try to match cached path commands
-  if (state == 0) {
-    it = path_commands.begin();
-  }
-  while (it != path_commands.end()) {
-    const std::string& cmd = *it;
-    ++it;
-    if (cmd.compare(0, len, c_text) == 0) return strdup(cmd.c_str());
-  }
+
+  if (idx < candidates.size())
+    return strdup(candidates[idx++].c_str());
+
   return nullptr;
 }
 
@@ -382,10 +381,22 @@ int main () {
       if (chdir(new_cwd.c_str()) != 0) {
         std::cout << "cd: " << new_cwd << ": No such file or directory" << std::endl;
       }
+
     } else if (cmd == "complete") {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-      if (args[0] == "-p") {
-        std::cout << "complete: " + args[1] + ": no completion specification" << std::endl;
+      if (args[0] == "-C") {
+        std::string completion_file = args[1];
+        std::string cmd_key = args[2];
+        completion_map[cmd_key] = completion_file;
+
+      } else if (args[0] == "-p") {
+        std::string cmd_key = args[1];
+
+        if (completion_map.find(cmd_key) != completion_map.end()) {
+          std::cout << "complete -C '" + completion_map[cmd_key] + "' " + cmd_key << std::endl;
+        } else {
+          std::cout << "complete: " + args[1] + ": no completion specification" << std::endl;
+        }
       }
     } else if (auto exec = get_executable(cmd)) {
       std::vector<std::string> args(tokens.begin() + 1, tokens.end());

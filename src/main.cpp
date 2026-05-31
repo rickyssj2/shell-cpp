@@ -355,9 +355,13 @@ char* custom_command_completion(const char* c_text, int state) {
 }
 
 char** custom_completion(const char* text, int start, int end) {
-  rl_attempted_completion_over = 1;       // never fall back to filename completion
   g_completing_command = (start == 0);    // start==0 means first word in the line
-  return rl_completion_matches(text, custom_command_completion);
+  char** matches = rl_completion_matches(text, custom_command_completion);
+  // Only suppress filename fallback if we found matches, or if we're completing
+  // a command name (where filename fallback makes no sense)
+  if (matches || g_completing_command)
+    rl_attempted_completion_over = 1;
+  return matches;
 }
 
 void readline_init() {

@@ -106,6 +106,56 @@ int execute (const std::string& cmd, const std::string& exec_full_path, const st
   return 1;
 }
 
+std::vector<std::string> run_completer (const std::string& path, const std::string partial) {
+  std::vector<std::string> candidates;
+
+  int pipe_fd[2];
+
+  if (pipe(pipe_fd) == -1) {
+    perror("pipe");
+    return candidates;
+  }
+
+  pid_t pid = fork();
+  
+  if (pid < 0) {
+    perror("fork");
+    return candidates;
+  }
+
+  if (pid == 0) {
+    close(pipe_fd[0]);
+    dup2(pipe_fd[1], STDOUT_FILENO);
+    close(pipe_fd[1]);
+
+    execl(path.c_str(), path.c_str(), partial.c_str(), nullptr);
+    perror("execl");
+    _exit(1);
+  }
+
+  close(pipe_fd[1]);
+
+  char buf[4096];
+  std::string output;
+  ssize_t n;
+  while ((n = read(pipe_fd[0], buf, sizeof(buf))) > 0) {
+    output.append(buf, n);
+  }
+  close(pipe_fd[0]);
+
+  if (waitpid(pid, nullptr, 0) < 0) {
+      std::perror("waitpid");
+      _exit(1);
+  }
+
+  std::istringstream ss(output);
+  std::string line;
+  while (std::getline(ss, line))
+    if (!line.empty()) candidates.push_back(line);
+
+  return candidates;
+}
+
 std::string strip (const std::string& str) {
   size_t first = str.find_first_not_of(" \t\n\r");
   if (first == std::string::npos) return "";
@@ -266,6 +316,10 @@ void cache_path_commands() {
   }
 }
 
+// Set by custom_completion before invoking the generator so it knows
+// whether we are completing a command name (start==0) or an argument.
+static bool g_completing_command = false;
+
 char* custom_command_completion(const char* c_text, int state) {
   static std::vector<std::string> candidates;
   static size_t idx;
@@ -275,13 +329,23 @@ char* custom_command_completion(const char* c_text, int state) {
     idx = 0;
     size_t len = strlen(c_text);
 
-    for (const auto& cmd : builtins)
-      if (cmd.compare(0, len, c_text) == 0)
-        candidates.push_back(cmd);
+    if (g_completing_command) {
+      // Completing the first word — match builtins + PATH commands
+      for (const auto& cmd : builtins)
+        if (cmd.compare(0, len, c_text) == 0)
+          candidates.push_back(cmd);
 
-    for (const auto& cmd : path_commands)
-      if (cmd.compare(0, len, c_text) == 0)
-        candidates.push_back(cmd);
+      for (const auto& cmd : path_commands)
+        if (cmd.compare(0, len, c_text) == 0)
+          candidates.push_back(cmd);
+    } else {
+      // Completing an argument — check for a registered completer script
+      std::string line(rl_line_buffer);
+      std::string first_word = line.substr(0, line.find(' '));
+      if (completion_map.find(first_word) != completion_map.end()) {
+        candidates = run_completer(completion_map.at(first_word), c_text);
+      }
+    }
   }
 
   if (idx < candidates.size())
@@ -290,12 +354,10 @@ char* custom_command_completion(const char* c_text, int state) {
   return nullptr;
 }
 
-char ** custom_completion(const char *text, int start, int end) {
-  char **matches = nullptr;
-
-  if (start == 0)
-    matches = rl_completion_matches(text, custom_command_completion);
-  return matches;
+char** custom_completion(const char* text, int start, int end) {
+  rl_attempted_completion_over = 1;       // never fall back to filename completion
+  g_completing_command = (start == 0);    // start==0 means first word in the line
+  return rl_completion_matches(text, custom_command_completion);
 }
 
 void readline_init() {
@@ -315,18 +377,15 @@ int main () {
   // Custom initializer to inject custom_command_completion
   readline_init();
 
-  // Configure readline to auto-complete paths when the tab key is hit.
-  rl_bind_key('\t', rl_complete);
-
   // Enable history
   using_history();
 
   int flag = 1;
   while (flag) {
     // Flush after every std::cout / std:cerr
-    std::cout << std::unitbuf;
-    std::cerr << std::unitbuf;
-    
+    // std::cout << std::unitbuf;
+    // std::cerr << std::unitbuf;
+  
     std::string input;
     input = readline("$ ");
     input = strip(input);
@@ -409,5 +468,9 @@ int main () {
 
     restore_fd(STDOUT_FILENO, out_r);
     restore_fd(STDERR_FILENO, err_r);
+
+    // Reset readline's internal state after each command, so that any output
+    // printed by the command doesn't confuse readline on the next prompt.
+    rl_on_new_line();
   }
 }
